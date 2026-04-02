@@ -1,4 +1,5 @@
 """Market information and slug management."""
+import json
 import time
 import httpx
 from typing import Optional, Dict, Any
@@ -71,8 +72,15 @@ class MarketInfoManager:
         if not clob_token_ids:
             return None
 
-        tokens = clob_token_ids.split(",")
-        if len(tokens) >= 2:
-            return tokens[0], tokens[1]  # (yes_token, no_token)
+        # Parse JSON array string like '["token1", "token2"]'
+        try:
+            tokens = json.loads(clob_token_ids)
+            if isinstance(tokens, list) and len(tokens) >= 2:
+                return tokens[0], tokens[1]  # (yes_token, no_token)
+        except json.JSONDecodeError:
+            # Fallback to comma-separated
+            tokens = clob_token_ids.split(",")
+            if len(tokens) >= 2:
+                return tokens[0], tokens[1]
 
         return None

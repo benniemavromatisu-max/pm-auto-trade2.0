@@ -45,8 +45,8 @@ class PricePoller:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    yes_price = data.get(self.yes_token, {}).get("BUY", 0.0)
-                    no_price = data.get(self.no_token, {}).get("SELL", 0.0)
+                    yes_price = float(data.get(self.yes_token, {}).get("BUY", 0.0))
+                    no_price = float(data.get(self.no_token, {}).get("SELL", 0.0))
                     self._yes_price = yes_price
                     self._no_price = no_price
                     self.price_callback(yes_price, no_price)
