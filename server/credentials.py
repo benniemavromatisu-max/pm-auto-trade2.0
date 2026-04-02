@@ -104,6 +104,8 @@ class CredentialsManager:
                     host="https://clob.polymarket.com",
                     chain_id=137,
                     key=private_key,
+                    signature_type=1,
+                    funder=self.funder_address,
                 )
                 creds: ApiCreds = client.create_or_derive_api_creds()
 
@@ -120,7 +122,7 @@ class CredentialsManager:
                 if self.config_manager:
                     self.config_manager.save()
 
-                logger.info(f"L2 credentials fetched and saved (api_key={creds.api_key[:8]}...)")
+                logger.info("L2 credentials fetched and saved")
                 return self._l2_creds
 
             except Exception as e:

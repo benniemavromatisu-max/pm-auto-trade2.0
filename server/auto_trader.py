@@ -58,6 +58,7 @@ class AutoTrader:
         self.market = MarketState()
         self._running = False
         self._trade_count = 0
+        self._price_lock = asyncio.Lock()
 
     def set_websocket_handler(self, ws_handler):
         self.ws_handler = ws_handler
@@ -137,8 +138,9 @@ class AutoTrader:
         time_until_start = self.market.start_time - now
 
         if time_until_start > -self.config.strategy.buy_window_minutes * 60:
-            yes_price = self.market.yes_price
-            no_price = self.market.no_price
+            async with self._price_lock:
+                yes_price = self.market.yes_price
+                no_price = self.market.no_price
             buy_min = self.config.strategy.buy_price_min
             buy_max = self.config.strategy.buy_price_max
 
@@ -196,11 +198,15 @@ class AutoTrader:
         time_until_end = self.market.end_time - now
         force_close = time_until_end <= self.config.strategy.force_close_minutes * 60
 
+        async with self._price_lock:
+            yes_price = self.market.yes_price
+            no_price = self.market.no_price
+
         for position in self.market.positions:
             if position.status != "open":
                 continue
 
-            current_price = self.market.yes_price if position.direction == "YES" else self.market.no_price
+            current_price = yes_price if position.direction == "YES" else no_price
 
             if force_close:
                 await self._close_position(position, "force_close")
@@ -211,7 +217,8 @@ class AutoTrader:
 
     async def _close_position(self, position: Position, reason: str):
         token_id = self.market.yes_token if position.direction == "YES" else self.market.no_token
-        current_price = self.market.yes_price if position.direction == "YES" else self.market.no_price
+        async with self._price_lock:
+            current_price = self.market.yes_price if position.direction == "YES" else self.market.no_price
         sell_price = self.order_service.calculate_sell_price(current_price, self.config.strategy.slippage)
 
         logger.info(f"Closing {position.direction} position at {sell_price} (reason: {reason})")
@@ -243,10 +250,11 @@ class AutoTrader:
 
             logger.info(f"Closed {position.direction} at {sell_price}, PnL: {pnl:.2f}")
 
-    def update_prices(self, yes_price: float, no_price: float):
+    async def update_prices(self, yes_price: float, no_price: float):
         """由 PricePoller 调用，更新当前市场价格。"""
-        self.market.yes_price = yes_price
-        self.market.no_price = no_price
+        async with self._price_lock:
+            self.market.yes_price = yes_price
+            self.market.no_price = no_price
 
     async def get_status(self) -> Dict:
         return {

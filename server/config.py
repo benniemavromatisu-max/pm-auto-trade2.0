@@ -4,6 +4,10 @@ import os
 from dataclasses import dataclass, field
 from typing import List
 
+from server.server_logger import get_logger
+
+logger = get_logger("config")
+
 
 @dataclass
 class StrategyConfig:
@@ -70,16 +74,21 @@ class ConfigManager:
     def load(self):
         """Load configuration from JSON file."""
         if os.path.exists(self.config_path):
-            with open(self.config_path, "r") as f:
-                data = json.load(f)
-                if "strategy" in data:
-                    for key, value in data["strategy"].items():
-                        if hasattr(self.config.strategy, key):
-                            setattr(self.config.strategy, key, value)
-                if "credentials" in data:
-                    for key, value in data["credentials"].items():
-                        if hasattr(self.config.credentials, key):
-                            setattr(self.config.credentials, key, value)
+            try:
+                with open(self.config_path, "r") as f:
+                    data = json.load(f)
+                    if "strategy" in data:
+                        for key, value in data["strategy"].items():
+                            if hasattr(self.config.strategy, key):
+                                setattr(self.config.strategy, key, value)
+                    if "credentials" in data:
+                        for key, value in data["credentials"].items():
+                            if hasattr(self.config.credentials, key):
+                                setattr(self.config.credentials, key, value)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse config file: {e}")
+            except Exception as e:
+                logger.error(f"Failed to load config file: {e}")
 
     def save(self):
         """Save configuration to JSON file (atomic write)."""

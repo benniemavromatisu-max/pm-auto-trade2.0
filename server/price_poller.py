@@ -1,7 +1,7 @@
 """REST API 价格轮询器，替代 WebSocket 获取价格。"""
 import asyncio
 import httpx
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Awaitable
 
 from server.server_logger import get_logger
 
@@ -15,7 +15,7 @@ class PricePoller:
 
     POLL_INTERVAL = 0.5  # 500ms
 
-    def __init__(self, yes_token: str, no_token: str, price_callback: Callable[[float, float], None]):
+    def __init__(self, yes_token: str, no_token: str, price_callback: Callable[[float, float], Awaitable[None]]):
         self.yes_token = yes_token
         self.no_token = no_token
         self.price_callback = price_callback  # 回调接收 (yes_price, no_price)
@@ -53,7 +53,7 @@ class PricePoller:
                     no_price = float(data.get(self.no_token, {}).get("SELL", 0.0))
                     self._yes_price = yes_price
                     self._no_price = no_price
-                    self.price_callback(yes_price, no_price)
+                    asyncio.create_task(self.price_callback(yes_price, no_price))
                 else:
                     logger.warning(f"Price fetch failed: {resp.status_code}")
             except Exception as e:
