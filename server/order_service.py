@@ -1,9 +1,18 @@
-"""Order service for placing and managing orders."""
+"""Order service for placing and managing orders using py-clob-client."""
 import asyncio
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_DOWN
+from typing import Optional, Dict, Any, Callable
 from enum import Enum
 import httpx
+
+from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import MarketOrderArgs, OrderType
+
+
+def _round_price(price: float) -> float:
+    """Round price to 2 decimal places using Decimal to avoid float precision issues."""
+    return float(Decimal(str(price)).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
 
 
 class OrderType(Enum):
@@ -27,18 +36,56 @@ class Position:
 
 
 class OrderService:
-    """Service for placing orders with retry logic."""
+    """Service for placing orders with retry logic using py-clob-client."""
 
     CLOB_API = "https://clob.polymarket.com"
     ORDER_TIMEOUT = 5
     MAX_RETRIES = 3
     RETRY_DELAY = 2
+    SIGNATURE_TYPE = 1  # POLY_PROXY
+    FEE_RATE_BPS = 1000  # 10% taker fee
 
     def __init__(self, credentials, signature_type: int = 1):
         self.credentials = credentials
         self.signature_type = signature_type
+        self._client: Optional[ClobClient] = None
         self._nonce = 0
         self._nonce_lock = asyncio.Lock()
+
+    async def _get_client(self) -> ClobClient:
+        """Get or create authenticated ClobClient."""
+        if self._client is not None:
+            return self._client
+
+        private_key = self.credentials.private_key
+        funder_address = self.credentials.funder_address
+
+        if not private_key or not funder_address:
+            raise ValueError("Missing POLY_PRIVATE_KEY or POLY_FUNDER_ADDRESS")
+
+        # Step 1: Create temp client to derive L2 credentials
+        temp_client = ClobClient(
+            host=self.CLOB_API,
+            chain_id=137,
+            key=private_key,
+            signature_type=self.signature_type,
+            funder=funder_address,
+        )
+
+        # Derive L2 credentials via L1 auth
+        api_creds = temp_client.create_or_derive_api_creds()
+
+        # Step 2: Create authenticated client with L2 credentials
+        self._client = ClobClient(
+            host=self.CLOB_API,
+            chain_id=137,
+            key=private_key,
+            creds=api_creds,
+            signature_type=self.signature_type,
+            funder=funder_address,
+        )
+
+        return self._client
 
     async def get_next_nonce(self) -> int:
         async with self._nonce_lock:
@@ -60,32 +107,30 @@ class OrderService:
         price: float,
         side: str = "BUY"
     ) -> Optional[Dict[str, Any]]:
-        order_data = {
-            "order": {
-                "maker": self.credentials.funder_address,
-                "signer": self.credentials.funder_address,
-                "taker": "0x0000000000000000000000000000000000000000",
-                "tokenId": token_id,
-                "makerAmount": str(int(amount * 1e6)),
-                "takerAmount": str(int(amount * price * 1e6)),
-                "side": side,
-                "expiration": str(int(asyncio.get_event_loop().time()) + 300),
-                "nonce": str(await self.get_next_nonce()),
-                "feeRateBps": "30",
-                "signature": "",
-                "salt": 0,
-                "signatureType": self.signature_type
-            },
-            "owner": self.credentials.api_key,
-            "orderType": OrderType.FOK.value,
-            "deferExec": False
-        }
+        """Place a market buy order."""
+        price_rounded = _round_price(price)
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                result = await self._submit_order(order_data)
+                client = await self._get_client()
+
+                order_args = MarketOrderArgs(
+                    token_id=token_id,
+                    amount=amount,
+                    side=side.upper(),
+                    price=price_rounded,
+                    fee_rate_bps=self.FEE_RATE_BPS,
+                )
+
+                signed_order = client.create_market_order(order_args)
+                result = client.post_order(signed_order, OrderType.FOK)
+
                 if result and result.get("success"):
                     return result
+
+                error_msg = result.get("errorMsg") or result.get("error") if result else "No result"
+                print(f"Buy order attempt {attempt + 1} failed: {error_msg}")
+
             except Exception as e:
                 print(f"Buy order attempt {attempt + 1} failed: {e}")
 
@@ -101,32 +146,30 @@ class OrderService:
         price: float,
         side: str = "SELL"
     ) -> Optional[Dict[str, Any]]:
-        order_data = {
-            "order": {
-                "maker": self.credentials.funder_address,
-                "signer": self.credentials.funder_address,
-                "taker": "0x0000000000000000000000000000000000000000",
-                "tokenId": token_id,
-                "makerAmount": str(int(amount * 1e6)),
-                "takerAmount": str(int(amount * price * 1e6)),
-                "side": side,
-                "expiration": str(int(asyncio.get_event_loop().time()) + 300),
-                "nonce": str(await self.get_next_nonce()),
-                "feeRateBps": "30",
-                "signature": "",
-                "salt": 0,
-                "signatureType": self.signature_type
-            },
-            "owner": self.credentials.api_key,
-            "orderType": OrderType.FOK.value,
-            "deferExec": False
-        }
+        """Place a market sell order."""
+        price_rounded = _round_price(price)
 
         for attempt in range(self.MAX_RETRIES):
             try:
-                result = await self._submit_order(order_data)
+                client = await self._get_client()
+
+                order_args = MarketOrderArgs(
+                    token_id=token_id,
+                    amount=amount,
+                    side=side.upper(),
+                    price=price_rounded,
+                    fee_rate_bps=self.FEE_RATE_BPS,
+                )
+
+                signed_order = client.create_market_order(order_args)
+                result = client.post_order(signed_order, OrderType.FOK)
+
                 if result and result.get("success"):
                     return result
+
+                error_msg = result.get("errorMsg") or result.get("error") if result else "No result"
+                print(f"Sell order attempt {attempt + 1} failed: {error_msg}")
+
             except Exception as e:
                 print(f"Sell order attempt {attempt + 1} failed: {e}")
 
@@ -134,24 +177,3 @@ class OrderService:
                 await asyncio.sleep(self.RETRY_DELAY)
 
         return None
-
-    async def _submit_order(self, order_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        headers = {
-            "POLY_API_KEY": self.credentials.api_key,
-            "POLY_ADDRESS": self.credentials.funder_address,
-            "POLY_PASSPHRASE": self.credentials.api_passphrase,
-            "POLY_TIMESTAMP": str(int(asyncio.get_event_loop().time())),
-        }
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self.CLOB_API}/order",
-                json=order_data,
-                headers=headers,
-                timeout=self.ORDER_TIMEOUT
-            )
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"Order failed: {response.status_code} - {response.text}")
-                return None
