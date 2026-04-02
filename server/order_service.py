@@ -8,6 +8,9 @@ import httpx
 
 from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import MarketOrderArgs, OrderType
+from server.server_logger import get_logger
+
+logger = get_logger("order_service")
 
 
 def _round_price(price: float) -> float:
@@ -129,10 +132,10 @@ class OrderService:
                     return result
 
                 error_msg = result.get("errorMsg") or result.get("error") if result else "No result"
-                print(f"Buy order attempt {attempt + 1} failed: {error_msg}")
+                logger.warning(f"Buy order attempt {attempt + 1} failed: {error_msg}")
 
             except Exception as e:
-                print(f"Buy order attempt {attempt + 1} failed: {e}")
+                logger.warning(f"Buy order attempt {attempt + 1} failed: {e}")
 
             if attempt < self.MAX_RETRIES - 1:
                 await asyncio.sleep(self.RETRY_DELAY)
@@ -168,10 +171,10 @@ class OrderService:
                     return result
 
                 error_msg = result.get("errorMsg") or result.get("error") if result else "No result"
-                print(f"Sell order attempt {attempt + 1} failed: {error_msg}")
+                logger.warning(f"Sell order attempt {attempt + 1} failed: {error_msg}")
 
             except Exception as e:
-                print(f"Sell order attempt {attempt + 1} failed: {e}")
+                logger.warning(f"Sell order attempt {attempt + 1} failed: {e}")
 
             if attempt < self.MAX_RETRIES - 1:
                 await asyncio.sleep(self.RETRY_DELAY)

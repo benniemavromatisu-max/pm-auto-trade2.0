@@ -4,6 +4,10 @@ import json
 import websockets
 from typing import Set, Optional, Dict, Any
 
+from server.server_logger import get_logger
+
+logger = get_logger("websocket")
+
 
 class WSHandler:
     """Handles WebSocket connections with frontend clients."""
@@ -22,14 +26,14 @@ class WSHandler:
     async def start(self):
         self._running = True
         self._server = await websockets.serve(self._handle_client, self.host, self.port)
-        print(f"WebSocket server started on ws://{self.host}:{self.port}")
+        logger.info(f"WebSocket server started on ws://{self.host}:{self.port}")
 
     async def stop(self):
         self._running = False
         if self._server:
             self._server.close()
             await self._server.wait_closed()
-        print("WebSocket server stopped")
+        logger.info("WebSocket server stopped")
 
     async def _handle_client(self, websocket):
         self._clients.add(websocket)

@@ -9,6 +9,9 @@ from server.config import ConfigManager
 from server.market_info import MarketInfoManager, get_current_slug, get_slug_end_timestamp, get_slug_start_timestamp
 from server.order_service import OrderService, Position
 from server.trade_log import TradeLog
+from server.server_logger import get_logger
+
+logger = get_logger("auto_trader")
 
 
 class TraderState(Enum):
@@ -119,12 +122,12 @@ class AutoTrader:
             if self._switch_market_callback:
                 await self._switch_market_callback(slug, self.market.yes_token, self.market.no_token)
 
-        print(f"New market: {slug}, starts in {self.market.start_time - time.time():.0f}s")
+        logger.info(f"New market: {slug}, starts in {self.market.start_time - time.time():.0f}s")
 
     async def _enter_listening(self):
         self.state = TraderState.LISTENING
         self.market.current_round = 0
-        print(f"Entering LISTENING state for {self.market.slug}")
+        logger.info(f"Entering LISTENING state for {self.market.slug}")
 
     async def _check_entries(self):
         if self.market.current_round >= self.config.strategy.rounds_per_market:
@@ -151,7 +154,7 @@ class AutoTrader:
         slippage = self.config.strategy.slippage
         buy_price = self.order_service.calculate_buy_price(price, slippage)
 
-        print(f"Buying {direction} at {buy_price} (price: {price}, slippage: {slippage})")
+        logger.info(f"Buying {direction} at {buy_price} (price: {price}, slippage: {slippage})")
 
         result = await self.order_service.place_market_buy(
             token_id=token_id,
@@ -186,7 +189,7 @@ class AutoTrader:
                 status="filled"
             )
 
-            print(f"Bought {direction} at {buy_price}, position created")
+            logger.info(f"Bought {direction} at {buy_price}, position created")
 
     async def _check_exit_conditions(self):
         now = time.time()
@@ -211,7 +214,7 @@ class AutoTrader:
         current_price = self.market.yes_price if position.direction == "YES" else self.market.no_price
         sell_price = self.order_service.calculate_sell_price(current_price, self.config.strategy.slippage)
 
-        print(f"Closing {position.direction} position at {sell_price} (reason: {reason})")
+        logger.info(f"Closing {position.direction} position at {sell_price} (reason: {reason})")
 
         result = await self.order_service.place_market_sell(
             token_id=token_id,
@@ -238,7 +241,7 @@ class AutoTrader:
                 pnl=pnl
             )
 
-            print(f"Closed {position.direction} at {sell_price}, PnL: {pnl:.2f}")
+            logger.info(f"Closed {position.direction} at {sell_price}, PnL: {pnl:.2f}")
 
     def update_prices(self, yes_price: float, no_price: float):
         """由 PricePoller 调用，更新当前市场价格。"""

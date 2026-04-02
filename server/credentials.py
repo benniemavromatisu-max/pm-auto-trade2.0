@@ -8,6 +8,9 @@ from py_clob_client.client import ClobClient
 from py_clob_client.clob_types import ApiCreds
 
 from server.config import ConfigManager, Config
+from server.server_logger import get_logger
+
+logger = get_logger("credentials")
 
 
 @dataclass
@@ -83,11 +86,11 @@ class CredentialsManager:
         """L1 auth: use private key to derive L2 credentials, save to config."""
         private_key = self.private_key
         if not private_key:
-            print("CredentialsManager: POLY_PRIVATE_KEY not set, skipping L2 credential fetch")
+            logger.warning("POLY_PRIVATE_KEY not set, skipping L2 credential fetch")
             return None
 
         if not self.funder_address:
-            print("CredentialsManager: POLY_FUNDER_ADDRESS not set, skipping L2 credential fetch")
+            logger.warning("POLY_FUNDER_ADDRESS not set, skipping L2 credential fetch")
             return None
 
         async with self.AUTH_LOCK:
@@ -95,7 +98,7 @@ class CredentialsManager:
             if self._l2_creds is not None:
                 return self._l2_creds
 
-            print("CredentialsManager: Fetching L2 credentials via L1 auth...")
+            logger.info("Fetching L2 credentials via L1 auth...")
             try:
                 client = ClobClient(
                     host="https://clob.polymarket.com",
@@ -117,11 +120,11 @@ class CredentialsManager:
                 if self.config_manager:
                     self.config_manager.save()
 
-                print(f"CredentialsManager: L2 credentials fetched and saved (api_key={creds.api_key[:8]}...)")
+                logger.info(f"L2 credentials fetched and saved (api_key={creds.api_key[:8]}...)")
                 return self._l2_creds
 
             except Exception as e:
-                print(f"CredentialsManager: Failed to fetch L2 credentials: {e}")
+                logger.warning(f"Failed to fetch L2 credentials: {e}")
                 return None
 
     def clear_l2_creds(self):

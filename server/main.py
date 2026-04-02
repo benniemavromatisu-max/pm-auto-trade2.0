@@ -9,6 +9,9 @@ from server.order_service import OrderService
 from server.trade_log import TradeLog
 from server.auto_trader import AutoTrader
 from server.websocket_handler import WSHandler
+from server.server_logger import get_logger
+
+logger = get_logger("main")
 
 
 class TradingServer:
@@ -43,11 +46,11 @@ class TradingServer:
             price_callback=lambda y, n: self.auto_trader.update_prices(y, n)
         )
         asyncio.create_task(self.price_poller.start())
-        print(f"Price poller switched to market: {slug}")
+        logger.info(f"Price poller switched to market: {slug}")
 
     async def start(self):
         self._running = True
-        print("Starting trading server...")
+        logger.info("Starting trading server...")
 
         # Auto-fetch L2 credentials via L1 auth if not already saved
         await self.credentials.fetch_and_save_l2_credentials()
@@ -61,9 +64,9 @@ class TradingServer:
         tokens = await self.market_info.get_token_ids(current_slug)
         if tokens:
             yes_token, no_token = tokens
-            print(f"Market: {current_slug}")
-            print(f"YES token: {yes_token}")
-            print(f"NO token: {no_token}")
+            logger.info(f"Market: {current_slug}")
+            logger.info(f"YES token: {yes_token}")
+            logger.info(f"NO token: {no_token}")
 
             self.price_poller = PricePoller(
                 yes_token=yes_token,
@@ -76,14 +79,14 @@ class TradingServer:
         if self.price_poller:
             asyncio.create_task(self.price_poller.start())
 
-        print("Trading server started successfully")
+        logger.info("Trading server started successfully")
 
         while self._running:
             await asyncio.sleep(1)
 
     async def stop(self):
         self._running = False
-        print("Stopping trading server...")
+        logger.info("Stopping trading server...")
 
         if self.price_poller:
             await self.price_poller.stop()
@@ -91,7 +94,7 @@ class TradingServer:
         await self.ws_handler.stop()
         await self.auto_trader.stop()
 
-        print("Trading server stopped")
+        logger.info("Trading server stopped")
 
 
 async def main():

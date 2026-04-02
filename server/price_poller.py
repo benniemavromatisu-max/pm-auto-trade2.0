@@ -3,6 +3,10 @@ import asyncio
 import httpx
 from typing import Callable, Tuple
 
+from server.server_logger import get_logger
+
+logger = get_logger("price_poller")
+
 CLOB_API = "https://clob.polymarket.com"
 
 
@@ -51,9 +55,9 @@ class PricePoller:
                     self._no_price = no_price
                     self.price_callback(yes_price, no_price)
                 else:
-                    print(f"Price fetch failed: {resp.status_code}")
+                    logger.warning(f"Price fetch failed: {resp.status_code}")
             except Exception as e:
-                print(f"Price fetch error: {e}")
+                logger.warning(f"Price fetch error: {e}")
 
     @property
     def prices(self) -> Tuple[float, float]:

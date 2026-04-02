@@ -4,6 +4,10 @@ import time
 import httpx
 from typing import Optional, Dict, Any
 
+from server.server_logger import get_logger
+
+logger = get_logger("market_info")
+
 GAMMA_API = "https://gamma-api.polymarket.com"
 
 
@@ -57,7 +61,7 @@ class MarketInfoManager:
                     self._cache_time[slug] = time.time()
                     return data
             except Exception as e:
-                print(f"Error fetching market info: {e}")
+                logger.warning(f"Error fetching market info: {e}")
                 return None
 
         return None
