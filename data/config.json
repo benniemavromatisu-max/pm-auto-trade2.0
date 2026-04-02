@@ -1,0 +1,20 @@
+{
+  "strategy": {
+    "buy_price_min": 18,
+    "buy_price_max": 22,
+    "stop_loss": 13,
+    "take_profit": 35,
+    "slippage": 0.10,
+    "buy_window_minutes": 2,
+    "force_close_minutes": 1,
+    "rounds_per_market": 3,
+    "buy_amount": 1.0
+  },
+  "credentials": {
+    "private_key": "",
+    "api_key": "",
+    "api_secret": "",
+    "api_passphrase": "",
+    "funder_address": ""
+  }
+}
