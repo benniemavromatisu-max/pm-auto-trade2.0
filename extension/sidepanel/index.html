@@ -1,28 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BTC 5m Auto Trader</title>
+    <title>BTC 5分钟自动交易</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Polymarket BTC 5m Auto Trader</h1>
+            <h1>Polymarket BTC 5分钟自动交易</h1>
         </header>
 
         <nav class="tabs">
-            <button class="tab active" data-tab="market">Market</button>
-            <button class="tab" data-tab="trades">Trades</button>
-            <button class="tab" data-tab="config">Config</button>
+            <button class="tab active" data-tab="market">市场</button>
+            <button class="tab" data-tab="trades">交易</button>
+            <button class="tab" data-tab="config">配置</button>
         </nav>
 
         <main>
             <section id="market-tab" class="tab-content active">
                 <div class="market-info">
-                    <div class="market-slug" id="market-slug">Loading...</div>
-                    <div class="status" id="status">IDLE</div>
+                    <div class="market-slug" id="market-slug">加载中...</div>
+                    <div class="status" id="status">空闲</div>
                 </div>
 
                 <div class="prices">
@@ -37,68 +37,68 @@
                 </div>
 
                 <div class="timer">
-                    <div>Time until start: <span id="time-start">--</span>s</div>
-                    <div>Time until end: <span id="time-end">--</span>s</div>
+                    <div>距开始: <span id="time-start">--</span>秒</div>
+                    <div>距结束: <span id="time-end">--</span>秒</div>
                 </div>
 
                 <div class="positions" id="positions">
-                    <h3>Positions</h3>
-                    <div id="positions-list">No open positions</div>
+                    <h3>持仓</h3>
+                    <div id="positions-list">暂无持仓</div>
                 </div>
 
                 <div class="controls">
-                    <button id="btn-start">Start Trading</button>
-                    <button id="btn-stop">Stop Trading</button>
+                    <button id="btn-start">开始交易</button>
+                    <button id="btn-stop">停止交易</button>
                 </div>
             </section>
 
             <section id="trades-tab" class="tab-content">
-                <h3>Trade History</h3>
+                <h3>交易历史</h3>
                 <div id="trades-list" class="trades-list">
-                    <p>No trades yet</p>
+                    <p>暂无交易</p>
                 </div>
             </section>
 
             <section id="config-tab" class="tab-content">
-                <h3>Trading Configuration</h3>
+                <h3>交易配置</h3>
                 <form id="config-form">
                     <div class="form-group">
-                        <label>Buy Price Min</label>
+                        <label>买入价格下限</label>
                         <input type="number" id="buy_price_min" value="18" step="0.1">
                     </div>
                     <div class="form-group">
-                        <label>Buy Price Max</label>
+                        <label>买入价格上限</label>
                         <input type="number" id="buy_price_max" value="22" step="0.1">
                     </div>
                     <div class="form-group">
-                        <label>Stop Loss</label>
+                        <label>止损</label>
                         <input type="number" id="stop_loss" value="13" step="0.1">
                     </div>
                     <div class="form-group">
-                        <label>Take Profit</label>
+                        <label>止盈</label>
                         <input type="number" id="take_profit" value="35" step="0.1">
                     </div>
                     <div class="form-group">
-                        <label>Slippage (%)</label>
+                        <label>滑点 (%)</label>
                         <input type="number" id="slippage" value="10" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Buy Window (minutes)</label>
+                        <label>买入窗口 (分钟)</label>
                         <input type="number" id="buy_window_minutes" value="2" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Force Close (minutes)</label>
+                        <label>强制平仓 (分钟)</label>
                         <input type="number" id="force_close_minutes" value="1" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Rounds per Market</label>
+                        <label>每市场轮次</label>
                         <input type="number" id="rounds_per_market" value="3" step="1">
                     </div>
                     <div class="form-group">
-                        <label>Buy Amount (USD)</label>
+                        <label>买入金额 (USD)</label>
                         <input type="number" id="buy_amount" value="1.0" step="0.1">
                     </div>
-                    <button type="submit">Save Configuration</button>
+                    <button type="submit">保存配置</button>
                 </form>
             </section>
         </main>

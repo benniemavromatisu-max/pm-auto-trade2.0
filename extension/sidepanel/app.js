@@ -38,7 +38,7 @@ class TradingApp {
             this.ws = new WebSocket('ws://localhost:8766');
 
             this.ws.onopen = () => {
-                console.log('Connected to server');
+                console.log('已连接到服务器');
                 this.connected = true;
                 this.requestStatus();
             };
@@ -53,7 +53,7 @@ class TradingApp {
             };
 
             this.ws.onclose = () => {
-                console.log('Disconnected from server');
+                console.log('已断开服务器连接');
                 this.connected = false;
             };
 
@@ -86,7 +86,7 @@ class TradingApp {
     updateStatus(status) {
         this.state = status.state;
         document.getElementById('status').textContent = status.state;
-        document.getElementById('market-slug').textContent = status.slug || 'Loading...';
+        document.getElementById('market-slug').textContent = status.slug || '加载中...';
 
         if (status.yes_price) {
             this.prices.YES = status.yes_price;
@@ -131,7 +131,7 @@ class TradingApp {
         const list = document.getElementById('positions-list');
 
         if (positions.length === 0) {
-            list.innerHTML = '<p>No open positions</p>';
+            list.innerHTML = '<p>暂无持仓</p>';
             return;
         }
 
@@ -156,7 +156,7 @@ class TradingApp {
         const list = document.getElementById('trades-list');
 
         if (this.trades.length === 0) {
-            list.innerHTML = '<p>No trades yet</p>';
+            list.innerHTML = '<p>暂无交易</p>';
             return;
         }
 
@@ -168,8 +168,8 @@ class TradingApp {
                         <span class="side ${sideClass}">${t.side} ${t.direction}</span>
                         <span>${new Date(t.timestamp * 1000).toLocaleTimeString()}</span>
                     </div>
-                    <div>Price: ${t.price.toFixed(2)} | Amount: $${t.amount}</div>
-                    ${t.exit_reason ? `<div class="exit-reason">Exit: ${t.exit_reason} | PnL: ${(t.pnl || 0).toFixed(2)}</div>` : ''}
+                    <div>价格: ${t.price.toFixed(2)} | 数量: $${t.amount}</div>
+                    ${t.exit_reason ? `<div class="exit-reason">退出: ${t.exit_reason} | 盈亏: ${(t.pnl || 0).toFixed(2)}</div>` : ''}
                 </div>
             `;
         }).join('');
