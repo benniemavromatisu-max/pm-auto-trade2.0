@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC 5m Auto Trader</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Polymarket BTC 5m Auto Trader</h1>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="market">Market</button>
+            <button class="tab" data-tab="trades">Trades</button>
+            <button class="tab" data-tab="config">Config</button>
+        </nav>
+
+        <main>
+            <section id="market-tab" class="tab-content active">
+                <div class="market-info">
+                    <div class="market-slug" id="market-slug">Loading...</div>
+                    <div class="status" id="status">IDLE</div>
+                </div>
+
+                <div class="prices">
+                    <div class="price-card yes">
+                        <span class="label">YES</span>
+                        <span class="value" id="yes-price">--</span>
+                    </div>
+                    <div class="price-card no">
+                        <span class="label">NO</span>
+                        <span class="value" id="no-price">--</span>
+                    </div>
+                </div>
+
+                <div class="timer">
+                    <div>Time until start: <span id="time-start">--</span>s</div>
+                    <div>Time until end: <span id="time-end">--</span>s</div>
+                </div>
+
+                <div class="positions" id="positions">
+                    <h3>Positions</h3>
+                    <div id="positions-list">No open positions</div>
+                </div>
+
+                <div class="controls">
+                    <button id="btn-start">Start Trading</button>
+                    <button id="btn-stop">Stop Trading</button>
+                </div>
+            </section>
+
+            <section id="trades-tab" class="tab-content">
+                <h3>Trade History</h3>
+                <div id="trades-list" class="trades-list">
+                    <p>No trades yet</p>
+                </div>
+            </section>
+
+            <section id="config-tab" class="tab-content">
+                <h3>Trading Configuration</h3>
+                <form id="config-form">
+                    <div class="form-group">
+                        <label>Buy Price Min</label>
+                        <input type="number" id="buy_price_min" value="18" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Buy Price Max</label>
+                        <input type="number" id="buy_price_max" value="22" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Stop Loss</label>
+                        <input type="number" id="stop_loss" value="13" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Take Profit</label>
+                        <input type="number" id="take_profit" value="35" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Slippage (%)</label>
+                        <input type="number" id="slippage" value="10" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Buy Window (minutes)</label>
+                        <input type="number" id="buy_window_minutes" value="2" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Force Close (minutes)</label>
+                        <input type="number" id="force_close_minutes" value="1" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Rounds per Market</label>
+                        <input type="number" id="rounds_per_market" value="3" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Buy Amount (USD)</label>
+                        <input type="number" id="buy_amount" value="1.0" step="0.1">
+                    </div>
+                    <button type="submit">Save Configuration</button>
+                </form>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
