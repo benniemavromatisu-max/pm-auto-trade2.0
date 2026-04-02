@@ -4,7 +4,7 @@
     "buy_price_max": 22,
     "stop_loss": 13,
     "take_profit": 35,
-    "slippage": 0.10,
+    "slippage": 0.1,
     "buy_window_minutes": 2,
     "force_close_minutes": 1,
     "rounds_per_market": 3,
@@ -12,9 +12,9 @@
   },
   "credentials": {
     "private_key": "",
-    "api_key": "",
-    "api_secret": "",
-    "api_passphrase": "",
+    "api_key": "b9b49320-34c6-ae15-75ba-05718d5747e6",
+    "api_secret": "N-yg-wUuBEsWcJ4rlG-29xrTaeZBMIUA66-JpJO6StM=",
+    "api_passphrase": "8dedb9f124feec58ba4fb34356a725251bb7b6b0bea9073a0d459f7c6774c851",
     "funder_address": ""
   }
 }

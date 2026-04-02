@@ -106,14 +106,14 @@ class CredentialsManager:
 
                 self._l2_creds = L2Credentials(
                     api_key=creds.api_key,
-                    secret=creds.secret,
-                    passphrase=creds.passphrase,
+                    secret=creds.api_secret,
+                    passphrase=creds.api_passphrase,
                 )
 
                 # Save to config for persistence
                 self._config.credentials.api_key = creds.api_key
-                self._config.credentials.api_secret = creds.secret
-                self._config.credentials.api_passphrase = creds.passphrase
+                self._config.credentials.api_secret = creds.api_secret
+                self._config.credentials.api_passphrase = creds.api_passphrase
                 if self.config_manager:
                     self.config_manager.save()
 

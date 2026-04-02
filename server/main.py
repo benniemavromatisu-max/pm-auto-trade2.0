@@ -3,7 +3,7 @@ import asyncio
 import signal
 from server.config import ConfigManager
 from server.credentials import CredentialsManager
-from server.market_info import MarketInfoManager
+from server.market_info import MarketInfoManager, get_current_slug
 from server.price_poller import PricePoller
 from server.order_service import OrderService
 from server.trade_log import TradeLog
@@ -42,7 +42,7 @@ class TradingServer:
 
         await self.ws_handler.start()
 
-        current_slug = self.market_info.get_current_slug()
+        current_slug = get_current_slug()
         tokens = await self.market_info.get_token_ids(current_slug)
         if tokens:
             yes_token, no_token = tokens
@@ -81,14 +81,16 @@ class TradingServer:
 
 async def main():
     server = TradingServer()
-
     loop = asyncio.get_event_loop()
 
     def signal_handler():
         asyncio.create_task(server.stop())
 
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, signal_handler)
+    try:
+        loop.add_signal_handler(signal.SIGINT, signal_handler)
+    except NotImplementedError:
+        # Windows doesn't support add_signal_handler
+        pass
 
     try:
         await server.start()
