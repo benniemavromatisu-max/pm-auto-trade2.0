@@ -49,6 +49,7 @@ class AutoTrader:
         self.order_service = order_service
         self.trade_log = trade_log
         self.ws_handler = ws_handler
+        self._switch_market_callback = None
 
         self.state = TraderState.IDLE
         self.market = MarketState()
@@ -57,6 +58,10 @@ class AutoTrader:
 
     def set_websocket_handler(self, ws_handler):
         self.ws_handler = ws_handler
+
+    def set_switch_market_callback(self, callback):
+        """Set callback to be called when market switches."""
+        self._switch_market_callback = callback
 
     async def start(self):
         self._running = True
@@ -109,6 +114,10 @@ class AutoTrader:
         tokens = await self.market_info.get_token_ids(slug)
         if tokens:
             self.market.yes_token, self.market.no_token = tokens
+
+            # Switch price poller to new market's tokens
+            if self._switch_market_callback:
+                await self._switch_market_callback(slug, self.market.yes_token, self.market.no_token)
 
         print(f"New market: {slug}, starts in {self.market.start_time - time.time():.0f}s")
 
