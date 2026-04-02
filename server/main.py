@@ -31,21 +31,29 @@ class TradingServer:
         )
         self.ws_handler = WSHandler()
         self.price_poller = None
+        self.price_poller_task = None
         self._running = False
         # Give auto_trader a callback to switch price poller on market change
         self.auto_trader.set_switch_market_callback(self._switch_price_poller)
 
     async def _switch_price_poller(self, slug: str, yes_token: str, no_token: str):
         """Switch price poller to new market's tokens."""
-        if self.price_poller:
-            await self.price_poller.stop()
+        # 取消旧的 PricePoller 任务
+        if self.price_poller_task:
+            self.price_poller_task.cancel()
+            try:
+                await self.price_poller_task
+            except asyncio.CancelledError:
+                pass
+            self.price_poller_task = None
+            logger.info("Old price poller cancelled")
 
         self.price_poller = PricePoller(
             yes_token=yes_token,
             no_token=no_token,
             price_callback=lambda y, n: self.auto_trader.update_prices(y, n)
         )
-        asyncio.create_task(self.price_poller.start())
+        self.price_poller_task = asyncio.create_task(self.price_poller.start())
         logger.info(f"Price poller switched to market: {slug}")
 
     async def start(self):
@@ -77,7 +85,7 @@ class TradingServer:
         asyncio.create_task(self.auto_trader.start())
 
         if self.price_poller:
-            asyncio.create_task(self.price_poller.start())
+            self.price_poller_task = asyncio.create_task(self.price_poller.start())
 
         logger.info("Trading server started successfully")
 
@@ -88,8 +96,12 @@ class TradingServer:
         self._running = False
         logger.info("Stopping trading server...")
 
-        if self.price_poller:
-            await self.price_poller.stop()
+        if self.price_poller_task:
+            self.price_poller_task.cancel()
+            try:
+                await self.price_poller_task
+            except asyncio.CancelledError:
+                pass
 
         await self.ws_handler.stop()
         await self.auto_trader.stop()

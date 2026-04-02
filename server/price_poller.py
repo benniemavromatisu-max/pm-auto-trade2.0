@@ -26,9 +26,13 @@ class PricePoller:
     async def start(self):
         """启动轮询循环。"""
         self._running = True
-        while self._running:
-            await self._fetch_prices()
-            await asyncio.sleep(self.POLL_INTERVAL)
+        try:
+            while self._running:
+                await self._fetch_prices()
+                await asyncio.sleep(self.POLL_INTERVAL)
+        except asyncio.CancelledError:
+            self._running = False
+            raise
 
     async def stop(self):
         """停止轮询。"""
@@ -49,6 +53,7 @@ class PricePoller:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
+                    logger.info(f"[{self.yes_token[:8]}...] Polling prices")
                     yes_price = float(data.get(self.yes_token, {}).get("BUY", 0.0))
                     no_price = float(data.get(self.no_token, {}).get("SELL", 0.0))
                     self._yes_price = yes_price

@@ -12,11 +12,12 @@ GAMMA_API = "https://gamma-api.polymarket.com"
 
 
 def get_current_slug() -> str:
-    """Get the current market slug based on current time."""
+    """Get the current market slug based on current time (uses start timestamp)."""
     now = time.time()
     period = 300  # 5 minutes
     end_timestamp = int(now // period) * period + period
-    return f"btc-updown-5m-{end_timestamp}"
+    start_timestamp = end_timestamp - period  # 5 minutes before end
+    return f"btc-updown-5m-{start_timestamp}"
 
 
 def get_next_slug() -> str:
@@ -28,8 +29,8 @@ def get_next_slug() -> str:
 
 
 def get_slug_end_timestamp(slug: str) -> int:
-    """Extract end timestamp from slug."""
-    return int(slug.split("-")[-1])
+    """Extract end timestamp from slug (slug contains start timestamp)."""
+    return int(slug.split("-")[-1]) + 300
 
 
 def get_slug_start_timestamp(slug: str) -> int:

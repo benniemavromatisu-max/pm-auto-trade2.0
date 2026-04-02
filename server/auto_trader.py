@@ -125,6 +125,15 @@ class AutoTrader:
 
         logger.info(f"New market: {slug}, starts in {self.market.start_time - time.time():.0f}s")
 
+        # 广播市场切换到前端
+        if self.ws_handler:
+            await self.ws_handler.broadcast_market_update({
+                "slug": slug,
+                "time_until_start": self.market.start_time - time.time(),
+                "time_until_end": self.market.end_time - time.time(),
+                "state": self.state.value
+            })
+
     async def _enter_listening(self):
         self.state = TraderState.LISTENING
         self.market.current_round = 0
@@ -255,6 +264,19 @@ class AutoTrader:
         async with self._price_lock:
             self.market.yes_price = yes_price
             self.market.no_price = no_price
+
+        # 广播价格更新到前端
+        if self.ws_handler:
+            now = time.time()
+            time_until_start = self.market.start_time - now
+            time_until_end = self.market.end_time - now
+            await self.ws_handler.broadcast_market_update({
+                "yes_price": yes_price,
+                "no_price": no_price,
+                "time_until_start": time_until_start,
+                "time_until_end": time_until_end,
+                "state": self.state.value
+            })
 
     async def get_status(self) -> Dict:
         return {

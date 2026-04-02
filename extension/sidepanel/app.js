@@ -102,6 +102,10 @@ class TradingApp {
     }
 
     updateMarket(data) {
+        if (data.slug) {
+            document.getElementById('market-slug').textContent = data.slug;
+        }
+
         if (data.yes_price) {
             this.prices.YES = data.yes_price;
             document.getElementById('yes-price').textContent = data.yes_price.toFixed(2);
