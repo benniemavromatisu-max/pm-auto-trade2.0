@@ -22,10 +22,12 @@ class PricePoller:
         self._running = False
         self._yes_price = 0.0
         self._no_price = 0.0
+        self._http_client: httpx.AsyncClient = None
 
     async def start(self):
         """启动轮询循环。"""
         self._running = True
+        self._http_client = httpx.AsyncClient(timeout=5.0)
         try:
             while self._running:
                 await self._fetch_prices()
@@ -33,6 +35,10 @@ class PricePoller:
         except asyncio.CancelledError:
             self._running = False
             raise
+        finally:
+            if self._http_client:
+                await self._http_client.aclose()
+                self._http_client = None
 
     async def stop(self):
         """停止轮询。"""
@@ -44,25 +50,22 @@ class PricePoller:
             {"token_id": self.yes_token, "side": "BUY"},
             {"token_id": self.no_token, "side": "SELL"}
         ]
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.post(
-                    f"{CLOB_API}/prices",
-                    json=payload,
-                    timeout=5.0
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    logger.info(f"[{self.yes_token[:8]}...] Polling prices")
-                    yes_price = float(data.get(self.yes_token, {}).get("BUY", 0.0))
-                    no_price = float(data.get(self.no_token, {}).get("SELL", 0.0))
-                    self._yes_price = yes_price
-                    self._no_price = no_price
-                    asyncio.create_task(self.price_callback(yes_price, no_price))
-                else:
-                    logger.warning(f"Price fetch failed: {resp.status_code}")
-            except Exception as e:
-                logger.warning(f"Price fetch error: {e}")
+        try:
+            resp = await self._http_client.post(
+                f"{CLOB_API}/prices",
+                json=payload
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                yes_price = float(data.get(self.yes_token, {}).get("BUY", 0.0))
+                no_price = float(data.get(self.no_token, {}).get("SELL", 0.0))
+                self._yes_price = yes_price
+                self._no_price = no_price
+                asyncio.create_task(self.price_callback(yes_price, no_price))
+            else:
+                logger.warning(f"Price fetch failed: {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Price fetch error: {e}")
 
     @property
     def prices(self) -> Tuple[float, float]:

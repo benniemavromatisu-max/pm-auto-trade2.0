@@ -154,31 +154,61 @@ class AutoTrader:
             buy_max = self.config.strategy.buy_price_max
 
             if buy_min <= yes_price <= buy_max:
-                await self._place_buy("YES", yes_price)
+                detected_at = time.time()
+                logger.info(f"[TRADE_DETECT] {self.market.slug} YES detected at price {yes_price}, time_until_start={time_until_start:.1f}s")
+                await self._place_buy("YES", yes_price, detected_at)
 
             if buy_min <= no_price <= buy_max:
-                await self._place_buy("NO", no_price)
+                detected_at = time.time()
+                logger.info(f"[TRADE_DETECT] {self.market.slug} NO detected at price {no_price}, time_until_start={time_until_start:.1f}s")
+                await self._place_buy("NO", no_price, detected_at)
 
-    async def _place_buy(self, direction: str, price: float):
+    async def _place_buy(self, direction: str, price: float, detected_at: float = None):
         token_id = self.market.yes_token if direction == "YES" else self.market.no_token
         amount = self.config.strategy.buy_amount
         slippage = self.config.strategy.slippage
         buy_price = self.order_service.calculate_buy_price(price, slippage)
 
-        logger.info(f"Buying {direction} at {buy_price} (price: {price}, slippage: {slippage})")
+        if detected_at is None:
+            detected_at = time.time()
 
+        logger.info(f"[TRADE_REQUEST] {direction} buying at {buy_price} (price: {price}, slippage: {slippage})")
+
+        order_start = time.time()
         result = await self.order_service.place_market_buy(
             token_id=token_id,
             amount=amount,
             price=buy_price,
             side="BUY"
         )
+        order_end = time.time()
+        order_duration = order_end - order_start
 
         if result and result.get("success"):
+            total_duration = order_end - detected_at
             self.market.current_round += 1
             order_id = result.get("orderID", "")
 
-            position = Position(
+            logger.info(f"[TRADE_RESULT] {direction} BUY SUCCESS orderID={order_id}, "
+                        f"detect_to_order={total_duration:.3f}s, order_request={order_duration:.3f}s")
+
+            # Broadcast timing info to frontend
+            if self.ws_handler:
+                await self.ws_handler.broadcast_trade_update({
+                    "timestamp": int(time.time()),
+                    "side": "BUY",
+                    "direction": direction,
+                    "price": buy_price,
+                    "amount": amount,
+                    "exit_reason": None,
+                    "pnl": None,
+                    "timing": {
+                        "detect_to_order": round(total_duration, 3),
+                        "order_request": round(order_duration, 3)
+                    }
+                })
+
+            new_position = Position(
                 direction=direction,
                 buy_price=buy_price,
                 buy_order_id=order_id,
@@ -187,7 +217,7 @@ class AutoTrader:
                 stop_loss=self.config.strategy.stop_loss,
                 take_profit=self.config.strategy.take_profit
             )
-            self.market.positions.append(position)
+            self.market.positions.append(new_position)
 
             self.trade_log.add_buy_record(
                 timestamp=int(time.time()),
@@ -199,8 +229,14 @@ class AutoTrader:
                 order_id=order_id,
                 status="filled"
             )
+            self.trade_log.save()
 
             logger.info(f"Bought {direction} at {buy_price}, position created")
+        else:
+            error_msg = f"买入失败: {direction} 价格 {buy_price}"
+            logger.warning(error_msg)
+            if self.ws_handler:
+                await self.ws_handler.broadcast_error(error_msg)
 
     async def _check_exit_conditions(self):
         now = time.time()
@@ -226,38 +262,90 @@ class AutoTrader:
 
     async def _close_position(self, position: Position, reason: str):
         token_id = self.market.yes_token if position.direction == "YES" else self.market.no_token
+        detected_at = time.time()
+
+        # Hold lock for entire close operation to prevent race condition
         async with self._price_lock:
             current_price = self.market.yes_price if position.direction == "YES" else self.market.no_price
-        sell_price = self.order_service.calculate_sell_price(current_price, self.config.strategy.slippage)
+            sell_price = self.order_service.calculate_sell_price(current_price, self.config.strategy.slippage)
 
-        logger.info(f"Closing {position.direction} position at {sell_price} (reason: {reason})")
+        # 获取链上实际份额 (outside lock to avoid blocking)
+        actual_shares = await self.order_service.get_token_shares(token_id)
+        if actual_shares <= 0:
+            logger.warning(f"No shares to sell for {position.direction}")
+            return
 
+        logger.info(f"[TRADE_REQUEST] {position.direction} selling at {sell_price}, shares={actual_shares}, reason={reason}")
+
+        sell_start = time.time()
         result = await self.order_service.place_market_sell(
             token_id=token_id,
-            amount=position.amount,
+            amount=actual_shares,
             price=sell_price,
             side="SELL"
         )
+        sell_end = time.time()
+        sell_duration = sell_end - sell_start
 
         if result and result.get("success"):
-            position.status = "closed" if reason == "force_close" else "sold"
-            position.sell_order_id = result.get("orderID", "")
+            total_duration = sell_end - detected_at
+            new_status = "closed" if reason == "force_close" else "sold"
+            # Use immutable update - create new positions list
+            new_positions = [
+                Position(
+                    direction=p.direction,
+                    buy_price=p.buy_price,
+                    buy_order_id=p.buy_order_id,
+                    amount=p.amount,
+                    sell_order_id=result.get("orderID", "") if p == position else p.sell_order_id,
+                    status=new_status if p == position else p.status,
+                    created_at=p.created_at,
+                    stop_loss=p.stop_loss,
+                    take_profit=p.take_profit
+                )
+                for p in self.market.positions
+            ]
+            self.market.positions = new_positions
 
-            pnl = (sell_price - position.buy_price) * position.amount
+            pnl = (sell_price - position.buy_price) * actual_shares
+
+            logger.info(f"[TRADE_RESULT] {position.direction} SELL SUCCESS orderID={result.get('orderID', '')}, "
+                        f"detect_to_sell={total_duration:.3f}s, sell_request={sell_duration:.3f}s")
 
             self.trade_log.add_sell_record(
                 timestamp=int(time.time()),
                 market_slug=self.market.slug,
                 direction=position.direction,
                 price=sell_price,
-                amount=position.amount,
+                amount=actual_shares,
                 order_id=position.sell_order_id,
                 status="filled",
                 exit_reason=reason,
                 pnl=pnl
             )
+            self.trade_log.save()
+
+            if self.ws_handler:
+                await self.ws_handler.broadcast_trade_update({
+                    "timestamp": int(time.time()),
+                    "side": "SELL",
+                    "direction": position.direction,
+                    "price": sell_price,
+                    "amount": actual_shares,
+                    "exit_reason": reason,
+                    "pnl": pnl,
+                    "timing": {
+                        "detect_to_sell": round(total_duration, 3),
+                        "sell_request": round(sell_duration, 3)
+                    }
+                })
 
             logger.info(f"Closed {position.direction} at {sell_price}, PnL: {pnl:.2f}")
+        else:
+            error_msg = f"卖出失败: {position.direction} 价格 {sell_price} 原因 {reason}"
+            logger.warning(error_msg)
+            if self.ws_handler:
+                await self.ws_handler.broadcast_error(error_msg)
 
     async def update_prices(self, yes_price: float, no_price: float):
         """由 PricePoller 调用，更新当前市场价格。"""

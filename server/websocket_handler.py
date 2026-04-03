@@ -57,6 +57,8 @@ class WSHandler:
                 await self._broadcast_status()
             elif msg_type == "get_status":
                 await self._send_status(websocket)
+            elif msg_type == "get_trades":
+                await self._send_trades(websocket)
         except json.JSONDecodeError:
             pass
 
@@ -97,6 +99,14 @@ class WSHandler:
                 "data": status
             }))
 
+    async def _send_trades(self, websocket):
+        if self.auto_trader:
+            trades = self.auto_trader.trade_log.get_today_trades()
+            await websocket.send(json.dumps({
+                "type": "trades",
+                "data": trades
+            }))
+
     async def _broadcast_status(self):
         if self.auto_trader:
             status = await self.auto_trader.get_status()
@@ -126,5 +136,17 @@ class WSHandler:
         })
         await asyncio.gather(
             *[client.send(message) for client in self._clients],
+            return_exceptions=True
+        )
+
+    async def broadcast_error(self, message: str):
+        """广播错误消息到前端。"""
+        data = {
+            "type": "error",
+            "message": message
+        }
+        msg = json.dumps(data)
+        await asyncio.gather(
+            *[client.send(msg) for client in self._clients],
             return_exceptions=True
         )

@@ -25,12 +25,72 @@ class TradingApp {
     }
 
     initWebSocket() {
-        this.connect();
+        this._reconnectDelay = 1000;  // Initial reconnect delay (ms)
+        this._maxReconnectDelay = 30000;  // Max delay (30s)
+        this._connect();
         setInterval(() => {
             if (!this.connected) {
-                this.connect();
+                this._connect();
             }
-        }, 5000);
+        }, this._reconnectDelay);
+    }
+
+    _connect() {
+        if (this._connecting) return;
+        this._connecting = true;
+
+        try {
+            this.ws = new WebSocket('ws://localhost:8766');
+
+            this.ws.onopen = () => {
+                console.log('已连接到服务器');
+                this.connected = true;
+                this._connecting = false;
+                this._reconnectDelay = 1000;  // Reset delay on success
+                this.requestStatus();
+                this.requestTrades();
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleMessage(data);
+                } catch (error) {
+                    console.error('Failed to parse message:', error);
+                }
+            };
+
+            this.ws.onclose = () => {
+                console.log('已断开服务器连接');
+                this.connected = false;
+                this._connecting = false;
+                this._scheduleReconnect();
+            };
+
+            this.ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.connected = false;
+                this._connecting = false;
+            };
+        } catch (error) {
+            console.error('Connection failed:', error);
+            this._connecting = false;
+            this._scheduleReconnect();
+        }
+    }
+
+    _scheduleReconnect() {
+        // Exponential backoff with jitter
+        const delay = Math.min(
+            this._reconnectDelay + Math.random() * 1000,
+            this._maxReconnectDelay
+        );
+        this._reconnectDelay = Math.min(this._reconnectDelay * 2, this._maxReconnectDelay);
+        setTimeout(() => {
+            if (!this.connected) {
+                this._connect();
+            }
+        }, delay);
     }
 
     connect() {
@@ -41,6 +101,7 @@ class TradingApp {
                 console.log('已连接到服务器');
                 this.connected = true;
                 this.requestStatus();
+                this.requestTrades();
             };
 
             this.ws.onmessage = (event) => {
@@ -77,9 +138,31 @@ class TradingApp {
             case 'trade_update':
                 this.addTrade(data.data);
                 break;
+            case 'trades':
+                this.trades = data.data || [];
+                this.renderTrades();
+                break;
             case 'config':
                 this.loadConfig(data.data);
                 break;
+            case 'error':
+                this.showError(data.message);
+                break;
+        }
+    }
+
+    showError(message) {
+        console.error('交易错误:', message);
+        const toast = document.getElementById('error-toast');
+        const msgEl = document.getElementById('error-message');
+        if (toast && msgEl) {
+            msgEl.textContent = '交易错误: ' + message;
+            toast.classList.remove('hidden');
+            // 5秒后自动隐藏
+            clearTimeout(this._errorTimeout);
+            this._errorTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 5000);
         }
     }
 
@@ -139,20 +222,35 @@ class TradingApp {
             return;
         }
 
-        list.innerHTML = positions.map(p => {
+        // Use textContent for user data to prevent XSS
+        list.innerHTML = '';
+        positions.forEach(p => {
             const pnl = p.pnl || 0;
             const pnlClass = pnl >= 0 ? 'positive' : 'negative';
-            return `
-                <div class="position-item ${p.direction.toLowerCase()}">
-                    <span>${p.direction} @ ${p.buy_price.toFixed(2)}</span>
-                    <span class="pnl ${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>
-                </div>
-            `;
-        }).join('');
+
+            const item = document.createElement('div');
+            item.className = `position-item ${String(p.direction).toLowerCase()}`;
+
+            const directionSpan = document.createElement('span');
+            directionSpan.textContent = `${p.direction} @ ${p.buy_price.toFixed(2)}`;
+
+            const pnlSpan = document.createElement('span');
+            pnlSpan.className = `pnl ${pnlClass}`;
+            pnlSpan.textContent = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`;
+
+            item.appendChild(directionSpan);
+            item.appendChild(pnlSpan);
+            list.appendChild(item);
+        });
     }
 
     addTrade(trade) {
         this.trades.unshift(trade);
+        // Bound trades array to prevent memory leak
+        const MAX_TRADES = 100;
+        if (this.trades.length > MAX_TRADES) {
+            this.trades = this.trades.slice(0, MAX_TRADES);
+        }
         this.renderTrades();
     }
 
@@ -164,19 +262,53 @@ class TradingApp {
             return;
         }
 
-        list.innerHTML = this.trades.map(t => {
-            const sideClass = t.side.toLowerCase();
-            return `
-                <div class="trade-item">
-                    <div class="header">
-                        <span class="side ${sideClass}">${t.side} ${t.direction}</span>
-                        <span>${new Date(t.timestamp * 1000).toLocaleTimeString()}</span>
-                    </div>
-                    <div>价格: ${t.price.toFixed(2)} | 数量: $${t.amount}</div>
-                    ${t.exit_reason ? `<div class="exit-reason">退出: ${t.exit_reason} | 盈亏: ${(t.pnl || 0).toFixed(2)}</div>` : ''}
-                </div>
-            `;
-        }).join('');
+        // Use textContent for user data to prevent XSS
+        list.innerHTML = '';
+        this.trades.forEach(t => {
+            const item = document.createElement('div');
+            item.className = 'trade-item';
+
+            const header = document.createElement('div');
+            header.className = 'header';
+
+            const sideSpan = document.createElement('span');
+            sideSpan.className = `side ${String(t.side).toLowerCase()}`;
+            sideSpan.textContent = `${t.side} ${t.direction}`;
+
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = new Date(t.timestamp * 1000).toLocaleTimeString();
+
+            header.appendChild(sideSpan);
+            header.appendChild(timeSpan);
+
+            const priceDiv = document.createElement('div');
+            priceDiv.textContent = `价格: ${t.price.toFixed(2)} | 数量: $${t.amount}`;
+
+            item.appendChild(header);
+            item.appendChild(priceDiv);
+
+            if (t.timing) {
+                const timingDiv = document.createElement('div');
+                timingDiv.className = 'timing-info';
+                timingDiv.style.color = '#888';
+                timingDiv.style.fontSize = '11px';
+                if (t.side === 'BUY') {
+                    timingDiv.textContent = `耗时: 检测到下单${t.timing.detect_to_order}s, 请求${t.timing.order_request}s`;
+                } else {
+                    timingDiv.textContent = `耗时: 检测到卖出${t.timing.detect_to_sell}s, 请求${t.timing.sell_request}s`;
+                }
+                item.appendChild(timingDiv);
+            }
+
+            if (t.exit_reason) {
+                const exitDiv = document.createElement('div');
+                exitDiv.className = 'exit-reason';
+                exitDiv.textContent = `退出: ${t.exit_reason} | 盈亏: ${(t.pnl || 0).toFixed(2)}`;
+                item.appendChild(exitDiv);
+            }
+
+            list.appendChild(item);
+        });
     }
 
     loadConfig(config) {
@@ -195,6 +327,10 @@ class TradingApp {
 
         document.getElementById('btn-stop').addEventListener('click', () => {
             this.send({ type: 'stop' });
+        });
+
+        document.getElementById('error-close').addEventListener('click', () => {
+            document.getElementById('error-toast').classList.add('hidden');
         });
     }
 
@@ -216,6 +352,10 @@ class TradingApp {
 
     requestStatus() {
         this.send({ type: 'get_status' });
+    }
+
+    requestTrades() {
+        this.send({ type: 'get_trades' });
     }
 
     send(data) {

@@ -1,5 +1,6 @@
 """Order service for placing and managing orders using py-clob-client."""
 import asyncio
+import time
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_DOWN
 from typing import Optional, Dict, Any, Callable
@@ -7,7 +8,7 @@ from enum import Enum
 import httpx
 
 from py_clob_client.client import ClobClient
-from py_clob_client.clob_types import MarketOrderArgs, OrderType
+from py_clob_client.clob_types import MarketOrderArgs, OrderType, BalanceAllowanceParams, AssetType
 from server.server_logger import get_logger
 
 logger = get_logger("order_service")
@@ -18,15 +19,9 @@ def _round_price(price: float) -> float:
     return float(Decimal(str(price)).quantize(Decimal("0.01"), rounding=ROUND_DOWN))
 
 
-class OrderType(Enum):
-    FOK = "FOK"
-    GTC = "GTC"
-    FAK = "FAK"
-
-
-@dataclass
+@dataclass(frozen=True)
 class Position:
-    """Represents an open position."""
+    """Represents an open position (immutable for thread safety)."""
     direction: str
     buy_price: float
     buy_order_id: str
@@ -44,7 +39,7 @@ class OrderService:
     CLOB_API = "https://clob.polymarket.com"
     ORDER_TIMEOUT = 5
     MAX_RETRIES = 3
-    RETRY_DELAY = 2
+    RETRY_DELAY = 0
     SIGNATURE_TYPE = 1  # POLY_PROXY
     FEE_RATE_BPS = 1000  # 10% taker fee
 
@@ -88,7 +83,14 @@ class OrderService:
             funder=funder_address,
         )
 
+        logger.info("ClobClient initialized and cached")
         return self._client
+
+    async def warmup(self):
+        """Pre-warm the client to avoid slow first order."""
+        logger.info("Warming up OrderService client...")
+        await self._get_client()
+        logger.info("OrderService warmup complete")
 
     async def get_next_nonce(self) -> int:
         async with self._nonce_lock:
@@ -103,6 +105,25 @@ class OrderService:
     def calculate_sell_price(current_price: float, slippage: float) -> float:
         return round(current_price * (1 - slippage), 2)
 
+    async def get_token_shares(self, token_id: str) -> float:
+        """Query chain for actual token shares (not USDC balance)."""
+        try:
+            client = await self._get_client()
+            result = client.get_balance_allowance(
+                params=BalanceAllowanceParams(
+                    asset_type=AssetType.CONDITIONAL,
+                    token_id=token_id
+                )
+            )
+            # 返回格式: {"balance": "3519597", "allowance": "..."}
+            balance_str = result.get("balance", "0")
+            shares = float(balance_str) / 1_000_000  # 6位小数
+            logger.info(f"Token shares for {token_id[:30]}...: {shares:.6f}")
+            return shares
+        except Exception as e:
+            logger.error(f"Failed to get token shares: {e}")
+            return 0
+
     async def place_market_buy(
         self,
         token_id: str,
@@ -115,18 +136,33 @@ class OrderService:
 
         for attempt in range(self.MAX_RETRIES):
             try:
+                t0 = time.time()
                 client = await self._get_client()
+                t1 = time.time()
+                get_client_time = t1 - t0
 
                 order_args = MarketOrderArgs(
                     token_id=token_id,
                     amount=amount,
                     side=side.upper(),
                     price=price_rounded,
+                    order_type=OrderType.FOK,
                     fee_rate_bps=self.FEE_RATE_BPS,
                 )
 
+                t2 = time.time()
                 signed_order = client.create_market_order(order_args)
-                result = client.post_order(signed_order, OrderType.FOK)
+                t3 = time.time()
+                create_order_time = t3 - t2
+                logger.info(f"[ORDER_TIMING] create_market_order took {create_order_time:.3f}s")
+
+                order_type_arg = "FOK"
+                t4 = time.time()
+                result = client.post_order(signed_order, order_type_arg)
+                t5 = time.time()
+                post_order_time = t5 - t4
+
+                logger.info(f"[ORDER_TIMING] BUY get_client={get_client_time:.3f}s create_order={create_order_time:.3f}s post_order={post_order_time:.3f}s")
 
                 if result and result.get("success"):
                     return result
@@ -138,7 +174,7 @@ class OrderService:
                 logger.warning(f"Buy order attempt {attempt + 1} failed: {e}")
 
             if attempt < self.MAX_RETRIES - 1:
-                await asyncio.sleep(self.RETRY_DELAY)
+                await asyncio.sleep(self.RETRY_DELAY)  # no delay between retries
 
         return None
 
@@ -154,18 +190,33 @@ class OrderService:
 
         for attempt in range(self.MAX_RETRIES):
             try:
+                t0 = time.time()
                 client = await self._get_client()
+                t1 = time.time()
+                get_client_time = t1 - t0
 
                 order_args = MarketOrderArgs(
                     token_id=token_id,
                     amount=amount,
                     side=side.upper(),
                     price=price_rounded,
+                    order_type=OrderType.FOK,
                     fee_rate_bps=self.FEE_RATE_BPS,
                 )
 
+                t2 = time.time()
                 signed_order = client.create_market_order(order_args)
-                result = client.post_order(signed_order, OrderType.FOK)
+                t3 = time.time()
+                create_order_time = t3 - t2
+                logger.info(f"[ORDER_TIMING] create_market_order took {create_order_time:.3f}s")
+
+                order_type_arg = "FOK"
+                t4 = time.time()
+                result = client.post_order(signed_order, order_type_arg)
+                t5 = time.time()
+                post_order_time = t5 - t4
+
+                logger.info(f"[ORDER_TIMING] SELL get_client={get_client_time:.3f}s create_order={create_order_time:.3f}s post_order={post_order_time:.3f}s")
 
                 if result and result.get("success"):
                     return result
@@ -177,6 +228,6 @@ class OrderService:
                 logger.warning(f"Sell order attempt {attempt + 1} failed: {e}")
 
             if attempt < self.MAX_RETRIES - 1:
-                await asyncio.sleep(self.RETRY_DELAY)
+                await asyncio.sleep(self.RETRY_DELAY)  # no delay between retries
 
         return None

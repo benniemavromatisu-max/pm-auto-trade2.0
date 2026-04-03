@@ -63,6 +63,9 @@ class TradingServer:
         # Auto-fetch L2 credentials via L1 auth if not already saved
         await self.credentials.fetch_and_save_l2_credentials()
 
+        # Pre-warm order service client to avoid slow first order
+        await self.order_service.warmup()
+
         self.auto_trader.set_websocket_handler(self.ws_handler)
         self.ws_handler.set_auto_trader(self.auto_trader)
 
