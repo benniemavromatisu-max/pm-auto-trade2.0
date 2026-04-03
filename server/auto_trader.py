@@ -114,6 +114,7 @@ class AutoTrader:
         self.market.positions = []
         self.market.yes_price = 0
         self.market.no_price = 0
+        self.state = TraderState.IDLE  # 重置状态，确保新市场能正常进入 LISTENING
 
         tokens = await self.market_info.get_token_ids(slug)
         if tokens:
