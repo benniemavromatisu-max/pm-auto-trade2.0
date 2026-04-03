@@ -247,18 +247,92 @@ class AutoTrader:
             yes_price = self.market.yes_price
             no_price = self.market.no_price
 
+        # 检查 YES 方向
         for position in self.market.positions:
-            if position.status != "open":
-                continue
+            if position.direction == "YES" and position.status == "open":
+                if force_close or yes_price >= position.take_profit or yes_price <= position.stop_loss:
+                    await self._close_all_positions("YES", force_close, yes_price, no_price)
+                    return
 
-            current_price = yes_price if position.direction == "YES" else no_price
+        # 检查 NO 方向
+        for position in self.market.positions:
+            if position.direction == "NO" and position.status == "open":
+                if force_close or no_price >= position.take_profit or no_price <= position.stop_loss:
+                    await self._close_all_positions("NO", force_close, yes_price, no_price)
+                    return
 
-            if force_close:
-                await self._close_position(position, "force_close")
-            elif current_price >= position.take_profit:
-                await self._close_position(position, "take_profit")
-            elif current_price <= position.stop_loss:
-                await self._close_position(position, "stop_loss")
+    async def _close_all_positions(self, direction: str, force_close: bool, yes_price: float, no_price: float):
+        """关闭指定方向的所有仓位，使用总余额一次性卖出。"""
+        token_id = self.market.yes_token if direction == "YES" else self.market.no_token
+        current_price = yes_price if direction == "YES" else no_price
+        reason = "force_close" if force_close else ("take_profit" if current_price >= 0.5 else "stop_loss")
+        if current_price >= 0.5:
+            reason = "take_profit"
+        else:
+            reason = "stop_loss"
+
+        detected_at = time.time()
+
+        # 获取总余额
+        actual_shares = await self.order_service.get_token_shares(token_id)
+        if actual_shares <= 0:
+            logger.warning(f"No shares to sell for {direction}")
+            return
+
+        slippage = self.config.strategy.slippage
+        sell_price = self.order_service.calculate_sell_price(current_price, slippage)
+
+        logger.info(f"[TRADE_REQUEST] {direction} closing all positions, shares={actual_shares}, price={sell_price}, reason={reason}")
+
+        sell_start = time.time()
+        result = await self.order_service.place_market_sell(
+            token_id=token_id,
+            amount=actual_shares,
+            price=sell_price,
+            side="SELL"
+        )
+        sell_end = time.time()
+
+        if result and result.get("success"):
+            total_duration = sell_end - detected_at
+            # 更新所有该方向的仓位为 closed
+            new_positions = [
+                Position(
+                    direction=p.direction,
+                    buy_price=p.buy_price,
+                    buy_order_id=p.buy_order_id,
+                    amount=p.amount,
+                    sell_order_id=result.get("orderID", "") if p.direction == direction else p.sell_order_id,
+                    status="closed" if p.direction == direction else p.status,
+                    created_at=p.created_at,
+                    stop_loss=p.stop_loss,
+                    take_profit=p.take_profit
+                )
+                for p in self.market.positions
+            ]
+            self.market.positions = new_positions
+
+            pnl = (sell_price - (current_price / (1 + slippage))) * actual_shares  # 简化计算
+
+            logger.info(f"[TRADE_RESULT] {direction} CLOSED ALL positions, orderID={result.get('orderID', '')}, "
+                        f"detect_to_sell={total_duration:.3f}s, sell_request={sell_end-sell_start:.3f}s")
+
+            if self.ws_handler:
+                await self.ws_handler.broadcast_trade_update({
+                    "timestamp": int(time.time()),
+                    "side": "SELL",
+                    "direction": direction,
+                    "price": sell_price,
+                    "amount": actual_shares,
+                    "exit_reason": reason,
+                    "pnl": pnl,
+                    "timing": {
+                        "detect_to_sell": round(total_duration, 3),
+                        "sell_request": round(sell_end - sell_start, 3)
+                    }
+                })
+
+            logger.info(f"Closed all {direction} positions at {sell_price}, PnL: {pnl:.2f}")
 
     async def _close_position(self, position: Position, reason: str):
         token_id = self.market.yes_token if position.direction == "YES" else self.market.no_token

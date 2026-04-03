@@ -277,6 +277,33 @@ form button {
     color: white;
     font-size: 20px;
     cursor: pointer;
+}
+
+.save-toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #4caf50;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    max-width: 90%;
+}
+
+.save-toast.hidden {
+    display: none;
+}
+
+.save-toast span {
+    flex: 1;
+}
+    cursor: pointer;
     padding: 0;
     width: auto;
 }

@@ -148,6 +148,26 @@ class TradingApp {
             case 'error':
                 this.showError(data.message);
                 break;
+            case 'config_saved':
+                if (data.success) {
+                    this.showSaveSuccess('配置保存成功');
+                } else {
+                    this.showError(data.error || '配置保存失败');
+                }
+                break;
+        }
+    }
+
+    showSaveSuccess(message) {
+        const toast = document.getElementById('save-toast');
+        const msgEl = document.getElementById('save-message');
+        if (toast && msgEl) {
+            msgEl.textContent = message;
+            toast.classList.remove('hidden', 'error');
+            clearTimeout(this._saveTimeout);
+            this._saveTimeout = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
         }
     }
 

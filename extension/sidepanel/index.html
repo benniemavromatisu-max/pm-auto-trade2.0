@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div id="error-toast" class="error-toast hidden">
+        <span id="error-message"></span>
+        <button id="error-close">×</button>
+    </div>
+    <div id="save-toast" class="save-toast hidden">
+        <span id="save-message"></span>
+    </div>
     <div class="container">
         <header>
             <h1>Polymarket BTC 5分钟自动交易</h1>
@@ -64,23 +71,23 @@
                 <form id="config-form">
                     <div class="form-group">
                         <label>买入价格下限</label>
-                        <input type="number" id="buy_price_min" value="18" step="0.1">
+                        <input type="number" id="buy_price_min" value="0.60" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>买入价格上限</label>
-                        <input type="number" id="buy_price_max" value="22" step="0.1">
+                        <input type="number" id="buy_price_max" value="0.63" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>止损</label>
-                        <input type="number" id="stop_loss" value="13" step="0.1">
+                        <input type="number" id="stop_loss" value="0.20" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>止盈</label>
-                        <input type="number" id="take_profit" value="35" step="0.1">
+                        <input type="number" id="take_profit" value="0.67" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>滑点 (%)</label>
-                        <input type="number" id="slippage" value="10" step="1">
+                        <input type="number" id="slippage" value="0.10" step="0.01">
                     </div>
                     <div class="form-group">
                         <label>买入窗口 (分钟)</label>
@@ -96,7 +103,7 @@
                     </div>
                     <div class="form-group">
                         <label>买入金额 (USD)</label>
-                        <input type="number" id="buy_amount" value="1.0" step="0.1">
+                        <input type="number" id="buy_amount" value="1" step="0.01">
                     </div>
                     <button type="submit">保存配置</button>
                 </form>

@@ -90,6 +90,18 @@ class WSHandler:
                 if hasattr(config, key):
                     setattr(config, key, value)
             self.auto_trader.config.save()
+            await self._broadcast_status()
+            await self._broadcast_message({"type": "config_saved", "success": True})
+        else:
+            await self._broadcast_message({"type": "config_saved", "success": False, "error": "Invalid config"})
+
+    async def _broadcast_message(self, message: Dict[str, Any]):
+        """Broadcast a message to all clients."""
+        msg = json.dumps(message)
+        await asyncio.gather(
+            *[client.send(msg) for client in self._clients],
+            return_exceptions=True
+        )
 
     async def _send_status(self, websocket):
         if self.auto_trader:
